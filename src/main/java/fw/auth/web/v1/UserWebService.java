@@ -1,9 +1,9 @@
 package fw.auth.web.v1;
 
-import static fw.auth.web.v1.AbstractWebService.logError;
-
-import java.util.ArrayList;
+import java.io.IOException;
+import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import javax.ws.rs.Consumes;
@@ -20,9 +20,6 @@ import javax.ws.rs.core.MediaType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
 import fw.auth.web.v1.model.AuthUserRoleConfig;
 import fw.auth.web.v1.model.Job;
 import fw.auth.web.v1.model.Login;
@@ -32,78 +29,52 @@ import uia.auth.AuthFuncHelper;
 import uia.auth.AuthFuncNode;
 import uia.auth.AuthUserHelper;
 import uia.auth.AuthValidator;
-import uia.auth.db.AuthFuncUserView;
-import uia.auth.db.AuthSecurityView;
+import uia.auth.db.ViewAuthFuncUser;
+import uia.auth.db.ViewAuthSecurity;
+import uia.auth.db.AuthRole;
 import uia.auth.db.AuthUser;
-import uia.auth.ee.Secured;
+import uia.dao.DaoException;
 
 @Path("/users")
-public class UserWebService {
+public class UserWebService extends AbstractWebService {
 
     private static final Logger LOGGER = LogManager.getLogger(UserWebService.class);
 
-    private Gson gson;
-
-    public UserWebService() {
-        this.gson = new GsonBuilder()
-                .setPrettyPrinting()
-                .setDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
-                .create();
-    }
-
     @GET
-    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    @Secured(authentication = true, authorization = "AUTH.USER.QRY")
-    public List<AuthUser> queryAll() {
+    public List<AuthUser> queryAll() throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][GET ] v1/users", tx));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	return helper.searchUsers();
         }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return null;
-        }
     }
     
     @POST
-    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    @Secured(authorization = "AUTH.USER.CREATE")
-    public AuthUser insert(AuthUser user) {
+    public AuthUser insert(AuthUser user) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
-        LOGGER.info(String.format("[%s][POST] v1/users? ", tx, this.gson.toJson(user)));
+        LOGGER.info(String.format("[%s][POST] v1/users? %s", tx, this.gson.toJson(user)));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	helper.insertUser(user);
         	return user;
         }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return null;
-        }
     }
    
     @PUT
-    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    @Secured(authorization = "AUTH.USER.UPDATE")
-    public AuthUser update(AuthUser user) {
+    public AuthUser update(AuthUser user) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
-        LOGGER.info(String.format("[%s][PUT] v1/users? ", tx, this.gson.toJson(user)));
+        LOGGER.info(String.format("[%s][PUT] v1/users? %s", tx, this.gson.toJson(user)));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	helper.updateUser(user);
         	return user;
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return null;
         }
     }
 
@@ -111,42 +82,32 @@ public class UserWebService {
     @Path("/{authUser}")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    @Secured(authorization = "AUTH.USER.DELETE")
-    public void delete(@PathParam("authUser") long authUser) {
+    public void delete(@PathParam("authUser") long authUser) throws SQLException, IOException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][DEL ] v1/users/%s", tx, authUser));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	helper.deleteUser(authUser);
         } 
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        }
     }
 
     @GET
     @Path("/{authUser}")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON) 
-    @Secured(authorization = "AUTH.USER.QRY")
-    public AuthUser queryOne(@PathParam("authUser") long authUser) {
+    public AuthUser queryOne(@PathParam("authUser") long authUser) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][GET ] v1/users/%s", tx, authUser));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	return helper.searchUser(authUser);
         }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return null;
-        }
     }
 
-    @POST
+    @GET
     @Path("/{authUser}/_resetPassword")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON) 
-    @Secured(authorization = "AUTH.USER.UPDATE")
     public void reset(@PathParam("authUser") long authUser) {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][POST] v1/users/%s/_resetPassword", tx, authUser));
@@ -155,7 +116,20 @@ public class UserWebService {
         	helper.chanagePassword(authUser, "12345");
         }
         catch(Exception ex) {
-            logError(LOGGER, tx, ex);
+        	
+        }
+    }
+
+    @POST
+    @Path("/_access")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON) 
+    public Map<String, AuthValidator.UserAccessInfo> access(@QueryParam("userId") String userId, @QueryParam("funcName") String funcName) throws SQLException, IOException, DaoException {
+        long tx = System.currentTimeMillis();
+        LOGGER.info(String.format("[%s][GET ] v1/users/_access=?userId=%s&funcName=%s", tx, userId, funcName));
+
+        try (AuthFuncHelper helper = new AuthFuncHelper()) {
+        	return helper.scan(userId, funcName);
         }
     }
 
@@ -163,8 +137,7 @@ public class UserWebService {
     @Path("/{authUser}/roles")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    @Secured(authorization = "AUTH.USER.QRY")
-    public List<AuthUserRoleConfig> queryRoles(@PathParam("authUser") long authUser, @QueryParam("all") boolean all) {
+    public List<AuthUserRoleConfig> queryRoles(@PathParam("authUser") long authUser, @QueryParam("all") boolean all) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][GET ] v1/users/%s/roles?all=%s", tx, authUser, all));
         
@@ -178,18 +151,13 @@ public class UserWebService {
         	
         	List<String> roles = helper.searchUserRoles(authUser)
         			.stream()
-        			.map(r -> r.getRoleName())
+        			.map(AuthRole::getRoleName)
         			.collect(Collectors.toList());
         	
         	return helper.searchRoles()
 	        	.stream()
 	        	.map(r -> new AuthUserRoleConfig(r, roles.contains(r.getRoleName())))
 				.collect(Collectors.toList());
-        	
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return new ArrayList<AuthUserRoleConfig>();
         }
     }
 
@@ -197,16 +165,12 @@ public class UserWebService {
     @Path("/{authUser}/roles/{authRole}")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public void insertRole(@PathParam("authUser") long authUser, @PathParam("authRole") long authRole) {
+    public void insertRole(@PathParam("authUser") long authUser, @PathParam("authRole") long authRole) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][POST] v1/users/%s/roles/%s", tx, authUser, authRole));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	helper.link(authUser, authRole);
-        	
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
         }
     }
 
@@ -214,16 +178,12 @@ public class UserWebService {
     @Path("/{authUser}/roles/{authRole}")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public void deleteRole(@PathParam("authUser") long authUser, @PathParam("authRole") long authRole) {
+    public void deleteRole(@PathParam("authUser") long authUser, @PathParam("authRole") long authRole) throws SQLException, IOException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][DEL ] v1/users/%s/roles/%s", tx, authUser, authRole));
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	helper.unlink(authUser, authRole);
-        	
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
         }
     }
 
@@ -231,16 +191,12 @@ public class UserWebService {
     @Path("/{authUser}/funcs")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public List<AuthFuncUserView> queryFuncs(@PathParam("authUser") long authUser) {
+    public List<ViewAuthFuncUser> queryFuncs(@PathParam("authUser") long authUser) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][GET] v1/users/%s/funcs", tx, authUser));
         
         try (AuthFuncHelper helper = new AuthFuncHelper()) {
         	return helper.searchUserFuncs(authUser);
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return null;
         }
     }
 
@@ -248,16 +204,12 @@ public class UserWebService {
     @Path("/{authUser}/funcTree")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public List<AuthFuncNode> queryTree(@PathParam("authUser") long authUser) {
+    public List<AuthFuncNode> queryTree(@PathParam("authUser") long authUser) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][GET ] v1/users/%s/funcTree", tx, authUser));
         
         try (AuthFuncHelper helper = new AuthFuncHelper()) {
         	return helper.scanUserFuncNodes(authUser);
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return new ArrayList<AuthFuncNode>();
         }
     }
 
@@ -265,12 +217,12 @@ public class UserWebService {
     @Path("/{authUser}/_validate")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public JobResult validate(@PathParam("authUser") long authUser, Job job) {
+    public JobResult validate(@PathParam("authUser") long authUser, Job job) throws SQLException, IOException, DaoException {
         long tx = System.currentTimeMillis();
         LOGGER.info(String.format("[%s][POST] v1/users/%s/_validate, job=%s", tx, authUser, this.gson.toJson(job)));
         
         try (AuthFuncHelper helper = new AuthFuncHelper()) {
-        	AuthValidator va = helper.validate(authUser);
+        	AuthValidator va = helper.validator(authUser);
         	for(String f : job.functions) {
         		if("and".equals(job.op)) {
             		va.and(f);
@@ -280,10 +232,6 @@ public class UserWebService {
         		}
         	}
         	return new JobResult(va.getUserId(), job.functions, va.result().name());
-        }
-        catch(Exception ex) {
-            logError(LOGGER, tx, ex);
-        	return null;
         }
     }
 
@@ -297,7 +245,7 @@ public class UserWebService {
         
         try (AuthUserHelper helper = new AuthUserHelper()) {
         	if(helper.validatePassword(login.userId,  login.password)) {
-        		AuthSecurityView asv = helper.udpateToken(login.userId, 1800000);
+        		ViewAuthSecurity asv = helper.udpateToken(login.userId, 1800000);
                 LOGGER.info(String.format("[%s]login, %s=%s", tx, login.userId, asv.getToken()));
         		return new LoginResult(login.userId, asv.getUserId(), 0, asv.getToken(), "success");
         	}
@@ -306,7 +254,7 @@ public class UserWebService {
         	}
         }
         catch(Exception ex) {
-            logError(LOGGER, tx, ex);
+        	LOGGER.error(String.format("[%s] failed, ex:{%s}", tx, ex.getMessage()), ex);
             return new LoginResult(login.userId, "", -1, null, ex.getMessage());
         }
     }

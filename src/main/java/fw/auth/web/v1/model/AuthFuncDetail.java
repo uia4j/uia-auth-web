@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import uia.auth.AuthValidator.AccessType;
-import uia.auth.db.AuthFuncRoleView;
-import uia.auth.db.AuthFuncUserView;
+import uia.auth.db.ViewAuthFuncRole;
+import uia.auth.db.ViewAuthFuncUser;
 
 public class AuthFuncDetail {
 
@@ -36,17 +36,20 @@ public class AuthFuncDetail {
 		private AccessType accessType;
 		
 		private boolean enabled;
-		
+				
+		private String funcUserArgs;
+
 		public UserInfo() {
 		}
 
-		public UserInfo(AuthFuncUserView user) {
+		public UserInfo(ViewAuthFuncUser user) {
 			this.authFunc = user.getAuthFunc();
 			this.authUser = user.getAuthUser();
 			this.userId = user.getUserId();
 			this.userName = user.getUserName();
 			this.accessType = AccessType.codeOf(user.getAccessType());
 			this.enabled = "Y".equalsIgnoreCase(user.getUserEnabled());
+			this.funcUserArgs = user.getFuncUserArgs();
 		}
 
 		public long getAuthFunc() {
@@ -73,6 +76,10 @@ public class AuthFuncDetail {
 			return this.enabled;
 		}
 
+		public String getFuncUserArgs() {
+			return funcUserArgs;
+		}
+
 	}
 
 	public static class RoleInfo {
@@ -87,15 +94,18 @@ public class AuthFuncDetail {
 		
 		private boolean enabled;
 		
+		private String funcRoleArgs;
+		
 		public RoleInfo() {
 		}
 
-		public RoleInfo(AuthFuncRoleView role) {
+		public RoleInfo(ViewAuthFuncRole role) {
 			this.authFunc = role.getAuthFunc();
 			this.authRole = role.getAuthRole();
 			this.roleName = role.getRoleName();
 			this.accessType = AccessType.codeOf(role.getAccessType());
 			this.enabled = "Y".equalsIgnoreCase(role.getRoleEnabled());
+			this.funcRoleArgs = role.getFuncRoleArgs();
 		}
 
 		public long getAuthFunc() {
@@ -116,6 +126,10 @@ public class AuthFuncDetail {
 
 		public boolean isEnabled() {
 			return this.enabled;
+		}
+
+		public String getFuncRoleArgs() {
+			return funcRoleArgs;
 		}
 	}
 }

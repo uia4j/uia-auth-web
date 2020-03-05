@@ -1,6 +1,5 @@
 package fw.auth.web;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.util.Properties;
 
@@ -11,7 +10,7 @@ import javax.servlet.ServletContextListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import uia.auth.db.conf.DB;
+import uia.auth.db.conf.AuthDB;
 
 public class AppListener implements ServletContextListener {
 
@@ -27,36 +26,26 @@ public class AppListener implements ServletContextListener {
     public void contextInitialized(ServletContextEvent evt) {
         ServletContext sc = evt.getServletContext();
         try {
-            String appPath = "/opt/auth-web/app.properties";
-            File file = new File(appPath);
-            if (!file.exists()) {
-                String path = sc.getRealPath("/") + "WEB-INF" + System.getProperty("file.separator");
-                appPath = path + "app.properties";
-            }
+            String appPath = sc.getRealPath("/") + "WEB-INF" + System.getProperty("file.separator") + "app.properties";
             LOGGER.info("properties = " + appPath);
 
-            // APP properties
-            Properties p = new Properties(System.getProperties());
-            p.load(new FileInputStream(appPath));
-            System.setProperties(p);
-
-            try {
-                LOGGER.info(String.format("auth.db.%s = %s, user:%s",
-                        System.getProperty("auth.db.env"),
-                        System.getProperty("auth.db.connection"),
-                        System.getProperty("auth.db.user")));
-                DB.config(
-                        System.getProperty("auth.db.connection"),
-                        System.getProperty("auth.db.user"),
-                        System.getProperty("auth.db.pwd"));
-            }
-            catch (Exception ex) {
-                ex.printStackTrace();
+            try (FileInputStream fis = new FileInputStream(appPath)) {
+                Properties p = new Properties(System.getProperties());
+                p.load(fis);
+                System.setProperties(p);
             }
 
+            LOGGER.info(String.format("auth.db.%s = %s, user:%s",
+                    System.getProperty("auth.db.env"),
+                    System.getProperty("auth.db.connection"),
+                    System.getProperty("auth.db.user")));
+            AuthDB.config(
+                    System.getProperty("auth.db.connection"),
+                    System.getProperty("auth.db.user"),
+                    System.getProperty("auth.db.pwd"));
         }
         catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.error("contextInitialized", e);
         }
     }
 }

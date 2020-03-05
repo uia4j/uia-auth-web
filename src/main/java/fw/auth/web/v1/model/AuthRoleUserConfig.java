@@ -1,6 +1,5 @@
 package fw.auth.web.v1.model;
 
-import uia.auth.db.AuthRole;
 import uia.auth.db.AuthUser;
 
 public class AuthRoleUserConfig {

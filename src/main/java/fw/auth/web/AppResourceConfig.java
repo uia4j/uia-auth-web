@@ -14,7 +14,11 @@ import uia.auth.ee.AuthResponseFilter;
 public class AppResourceConfig extends ResourceConfig {
 
     public AppResourceConfig() {
-        packages("fw.auth.web.v1");
+
+        register(SQLExceptionMapper.class);
+        register(DaoExceptionMapper.class);
+    	
+    	packages("fw.auth.web.v1");
         register(MyContainerResponseFilter.class);
         register(MyContextResolver.class);
         register(MyJacksonFeature.class);

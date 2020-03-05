@@ -6,6 +6,8 @@ public class AuthFuncUserConfig {
 	
 	public String accessType;
 	
+	public String funcUserArgs;
+	
 	public AuthFuncUserConfig() {
 		this.accessType = "DENY";
 	}
